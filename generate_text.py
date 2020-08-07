@@ -5,7 +5,7 @@ import requests
 import sys
 
 flag_pretrain = sys.argv[2]
-model_name = "124M"
+model_name = "124M" ##355M ##774M
 
 if flag_pretrain.lower() == "true":
     print("if",flag_pretrain, model_name)
