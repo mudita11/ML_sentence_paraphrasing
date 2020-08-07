@@ -1,1 +1,1 @@
-# T5_sentence_paraphrasing
+# sentence_paraphrasing using GPT-2 and T5 models
