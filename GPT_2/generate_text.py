@@ -7,6 +7,7 @@ import sys
 flag_pretrain = sys.argv[2]
 model_name = "124M" ##355M ##774M
 
+# flag_pretrain to download the pre-trained embeddings
 if flag_pretrain.lower() == "true":
     print("if",flag_pretrain, model_name)
     if not os.path.isdir(os.path.join("models", model_name)):
@@ -23,8 +24,9 @@ else:
         with open(file_name, 'w') as f:
             f.write(data.text)
     
-    sess = gpt_2.start_tf_sess()
-    gpt_2.finetune(sess, file_name, model_name=model_name, steps=10)   # steps is max number of training steps
+    # to fine-tune the model
+    #sess = gpt_2.start_tf_sess()
+    #gpt_2.finetune(sess, file_name, model_name=model_name, steps=10)   # steps is max number of training steps
 
 sess = gpt_2.start_tf_sess()
 gpt_2.load_gpt2(sess)
