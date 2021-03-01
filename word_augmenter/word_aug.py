@@ -1,10 +1,8 @@
 import xlsxwriter
 import os
-#os.environ["MODEL_DIR"] = './nlpaug/model'
 import nlpaug
 import nlpaug.augmenter.word as naw
-import nlpaug.augmenter.sentence as nas
-
+from itertools import product
 
 def model_for_aug_type(aug_type):
     if aug_type == "random_aug":
@@ -15,11 +13,11 @@ def model_for_aug_type(aug_type):
                         ]
     if aug_type == "word_emb":
         database_choice = [
-                            ('word2vec', 'word2vec', './GoogleNews-vectors-negative300'),
-                            ('glove50d', 'glove', './glove.6B/glove.6B.50d.txt'),
-                            ('glove100d', 'glove', './glove.6B/glove.6B.100d.txt'),
-                            ('glove200d', 'glove', './glove.6B/glove.6B.200d.txt'),
-                            ('glove300d', 'glove', './glove.6B/glove.6B.300d.txt'),
+                            #('word2vec', 'word2vec', './GoogleNews-vectors-negative300'),
+                            #('glove50d', 'glove', './glove.6B/glove.6B.50d.txt'),
+                            #('glove100d', 'glove', './glove.6B/glove.6B.100d.txt'),
+                            #('glove200d', 'glove', './glove.6B/glove.6B.200d.txt'),
+                            #('glove300d', 'glove', './glove.6B/glove.6B.300d.txt'),
                             ('fasttext', 'fasttext', './wiki-news-300d-1M.vec')
                         ]
     if aug_type == "cont_word_emb":
@@ -35,15 +33,16 @@ def model_for_aug_type(aug_type):
     
     
 class DataAugmenter():
-    def __init__(self, aug_type, stopwords, target_words):
+    def __init__(self, aug_type, stopwords, target_words, n_words):
         self.aug_type = aug_type
         self.database_choice = model_for_aug_type(self.aug_type)
         self.action_choices = ["substitute"]#, "insert"]
         self.action_choices_random_aug = ['substitute', 'swap', 'delete'] # 'crop' can only generate one sample # ‘substitute’ uses target_words argument
-        self.aug_p_choices = [0.1]#, 0.2, 0.3, 0.4, 0.5]
-        self.randomness_factor = [0.01]#, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] #temperature
+        self.aug_p_choices = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+        self.randomness_factor = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0] #temperature
         self.stopwords = stopwords
         self.target_words = target_words
+        self.n_words = n_words
         self.workbook = xlsxwriter.Workbook('./'+aug_type+'.xlsx')
         
     def generate_data(self):
@@ -52,57 +51,55 @@ class DataAugmenter():
         call_method()
         
     def fn_random_aug(self):
-        for choice1 in self.action_choices_random_aug:
-            for choice2 in self.aug_p_choices:
-                aug = naw.RandomWordAug(name='RandomWord_Aug', action=choice1, aug_p=choice2, stopwords=self.stopwords, target_words=self.target_words)
-                print("\nmodelname-action-words augmented: {}-{}-{}\n".format("random Augmenter", choice1, choice2))
-                augmented_text = aug.augment(text, n = 30)
-                print(augmented_text)
-                
-                self.write_excel(augmented_text, None, choice1, choice2)
+        product_choices = list(product(self.action_choices_random_aug, self.aug_p_choices))
+        for item in product_choices:
+            aug = naw.RandomWordAug(name='RandomWord_Aug', action=item[0], aug_p=item[1], stopwords=self.stopwords, target_words=self.target_words)
+            print("\nmodelname-action-words augmented: {}-{}-{}\n".format("random Augmenter", item[0], item[1]))
+            augmented_text = aug.augment(text, n=self.n_words)
+            print(augmented_text)
+            
+            self.write_excel(augmented_text, None, item[0], item[1])
         self.workbook.close()
                 
     def fn_synonym_replacement(self):
-        for item in self.database_choice:
-            for choice1 in self.aug_p_choices:
-                aug = naw.SynonymAug(aug_src=item[1], aug_p=choice1, stopwords=self.stopwords)
-                print("\nmodelname-action-words augmented: {}-{}-{}\n".format(item, "substitute", choice1))
-                augmented_text = aug.augment(text, n = 30)
-                print(augmented_text, "\n")
-                
-                self.write_excel(augmented_text, item, choice1)
+        product_choices = list(product(self.database_choice, self.aug_p_choices))
+        for item in product_choices:
+            aug = naw.SynonymAug(aug_src=item[0][1], aug_p=item[1], stopwords=self.stopwords)
+            print("\nmodelname-action-words augmented: {}-{}-{}\n".format(item[0][0], "substitute", item[1]))
+            augmented_text = aug.augment(text, n=self.n_words)
+            print(augmented_text, "\n")
+            
+            self.write_excel(augmented_text, item, item[1])
         self.workbook.close()
         
     def fn_word_emb(self):
-        for item in self.database_choice:
-            for choice1 in self.action_choices:
-                for choice2 in self.aug_p_choices:
-                    aug = naw.WordEmbsAug(model_type=item[1], model_path=item[2], action=choice1, aug_p=choice2, stopwords=self.stopwords)
-                    print("\nmodelname-action-words augmented: {}-{}-{}\n".format(item[0], choice1, choice2))
-                    augmented_text = aug.augment(text, n=30)
-                    print(augmented_text, "\n")
+        product_choices = list(product(self.database_choice, self.action_choices, self.aug_p_choices))
+        for item in product_choices:
+            aug = naw.WordEmbsAug(model_type=item[0][1], model_path=item[0][2], action=item[1], aug_p=item[2], stopwords=self.stopwords)
+            print("\nmodelname-action-words augmented: {}-{}-{}\n".format(item[0][0], item[1], item[2]))
+            augmented_text = aug.augment(text, n=self.n_words)
+            print(augmented_text, "\n")
                     
-                    self.write_excel(augmented_text, item, choice1, choice2)
+            self.write_excel(augmented_text, item, item[1], item[2])
         self.workbook.close()
         
     def fn_cont_word_emb(self):
-        for item in self.database_choice:
-            for choice1 in self.action_choices:
-                for choice2 in self.aug_p_choices:
-                    for choice3 in self.randomness_factor:
-                        aug = naw.ContextualWordEmbsAug(model_path=item[1], action=choice1, aug_p=choice2, temperature = choice3, stopwords=self.stopwords)
-                        print("\nmodelname-action-words augmented-randomness: {}-{}-{}-{}".format(item[0], choice1, choice2, choice3))
-                        augmented_text = aug.augment(text, n=30)
-                        print(augmented_text, "\n")
+        product_choices = list(product(self.database_choice, self.action_choices, self.aug_p_choices, self.randomness_factor))
+        for item in product_choices:
+            print("item: ",item); print(item[0])
+            aug = naw.ContextualWordEmbsAug(model_path=item[0][1], action=item[1], aug_p=item[2], temperature = item[3], stopwords=self.stopwords)
+            print("\nmodelname-action-words augmented-randomness: {}-{}-{}-{}".format(item[0][0], item[1], item[2], item[3]))
+            augmented_text = aug.augment(text, n=self.n_words)
+            print(augmented_text, "\n")
         
-                        self.write_excel(augmented_text, item, choice1, choice2, choice3)
+            self.write_excel(augmented_text, item, item[1], item[2], item[3])
         self.workbook.close()
     
     def write_excel(self, augmented_text, item, choice1, choice2=None, choice3=None):
         if self.aug_type == "random_aug":
             worksheet_name = str(choice1)[:3]+'-'+str(choice2)
         else:
-            worksheet_name = str(item[0])+'-'+str(choice1)[:3]+'-'+str(choice2)+'-'+str(choice3)
+            worksheet_name = str(item[0][0])+'-'+str(choice1)[:3]+'-'+str(choice2)+'-'+str(choice3)
         worksheet = self.workbook.add_worksheet(worksheet_name)
         row = 0
         col = 0
@@ -111,15 +108,16 @@ class DataAugmenter():
             row += 1
 
 
-text = 'how long does a ​Will last' #'how long is it going to take to prepare a will?' #'i have been recommended to you regarding your free Will service with a charitable donation'#'i am looking to get a better understanding of the process as a whole' #'Do you provide interpreters?' #'How long does it takes?' #'can you prepare a draft lease for me of a shop?' #What are the charges to your services?'
-stopwords=['Will']
+text = 'What are the charges to your services?'
+stopwords = None
 target_words = None
+n_words = 2
 
 print("Original: {}\n".format(text))
 
 aug_type = ["random_aug","synonym_replacement","word_emb","cont_word_emb"]
 
-da = DataAugmenter(aug_type[2], stopwords, target_words)
+da = DataAugmenter(aug_type[0], stopwords, target_words, n_words)
 da.generate_data()
             
 
